@@ -1,4 +1,7 @@
-# loginvue
+
+# Project Task Registration System
+
+Project with Login and Task Registration system
 
 ## Project setup
 ```
@@ -9,6 +12,12 @@ npm install
 ```
 npm run serve
 ```
+
+### Compiles the backend
+```
+npm run backend
+```
+
 
 ### Compiles and minifies for production
 ```

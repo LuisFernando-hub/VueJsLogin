@@ -1,18 +1,55 @@
 <template>
   <div class="container mt-2">
-      <template v-if="!isTasksEmpty">
-        <div v-for="(task, index) in tasks" :key="index">
-            <b-card :title="task.subject" class="mb-2">
-                <b-card-text>{{task.description}}</b-card-text>
-            <b-button variant="outline-secondary" class="mr-2" @click="edit(index)" >Editar</b-button>
-            <b-button variant="outline-danger" class="mr-2" @click="remove(task, index)" >Excluir</b-button>
-            </b-card>
-        </div>
+      <b-form inline class="mb-2">
+          <b-form-input 
+          v-model="filter.subject"
+          id="subject"
+          placeholder="Ex: Tarefa teste"
+          class="mr-2"
+          autocomplete="off"
+          ></b-form-input>
+      <b-form-select
+        v-model="filter.status"
+        :options="optionsList"
+        class="mr-2"
+      ></b-form-select>
+
+      <b-button variant="outline-secondary" class="mr-2" @click="filterTasks" v-b-tooltip.hover title="Filtrar" ><i class="fas fa-search"></i></b-button>
+      <b-button variant="outline-secondary" class="mr-2" @click="clearFilter" v-b-tooltip.hover title="Limpar Filtro" ><i class="fas fa-times"></i></b-button>
+      </b-form>
+
+      <template v-if="isLoading">
+       <div class="loading-spin">
+           <b-spinner style="width: 5rem; height: 5rem;"></b-spinner>
+       </div>
       </template>
-    <template v-else>
+
+      <template v-if="isTasksEmpty && !isLoading">
         <div class="empty-data mt-2">
             <img src="../assets/empty-data.svg" class="empty-data-image">
             <b-button variant="outline-primary" class="mt-2" size="lg" to="/form" > Criar Tarefa </b-button>
+        </div>
+      </template>
+    <template v-if="!isTasksEmpty && !isLoading">
+        <div v-for="(task) in tasks" :key="task.id">
+            <b-card 
+                :class="{'finished-task': isFinished(task)}" 
+                class="mb-2"
+                >
+                <div class="d-flex justify-content-between">
+                    <b-card-title>{{task.subject}}</b-card-title>
+                    <span>
+                        <b-badge
+                        :variant="variantOverdue(task.dateOverdue, task.status)"
+                        >{{overduePresente(task.dateOverdue)}}</b-badge>
+                    </span>
+                </div>
+                <b-card-text>{{task.description}}</b-card-text>
+            <b-button variant="outline-secondary" class="mr-2" @click="updateStatus(task.id,status.FINISHED)" v-b-tooltip.hover title="Concluir" > <i class="fas fa-check"></i> </b-button>
+            <b-button variant="outline-secondary" class="mr-2" @click="updateStatus(task.id,status.ARCHIVED)" v-b-tooltip.hover title="Arquivar" ><i class="fas fa-archive"></i></b-button>
+            <b-button variant="outline-secondary" class="mr-2" @click="edit(task.id)" v-b-tooltip.hover title="Editar" ><i class="fas fa-edit"></i></b-button>
+            <b-button variant="outline-danger" class="mr-2" @click="remove(task.id)" v-b-tooltip.hover title="Excluir" ><i class="fas fa-times"></i></b-button>
+            </b-card>
         </div>
     </template>
     <b-modal ref="modalRemove" hide-footer title="Exclusão de tarefa" >
@@ -29,32 +66,50 @@
 
 <script>
 
+import Status from "@/valueObjects/status.js";
 import TasksModel from "@/models/TasksModel";
+import ToastMixin from "@/mixins/toastMixin";
 
 export default {
   name: "List",
+ 
+ mixins: [ToastMixin],
 
   data() {
      return {
          tasks: [],
-         taskSelected: []
+         taskSelected: [],
+         status: Status,
+         filter: {
+             subject: null,
+             status: null
+         },
+         optionsList: [
+          { value:null, text: "Selecione algum status" },
+          { value:Status.OPEN, text: "Aberto" },
+          { value:Status.FINISHED, text: "Concluido" },
+          { value:Status.ARCHIVED, text: "Arquivado" }
+        ],
+        isLoading: false,
+        statusList: [Status.OPEN, Status.FINISHED]
      }
   },
 
   async created() {
-    this.tasks = await TasksModel.get();
+    this.tasks = await this.getTasks();
     // console.log(tasks);
     // this.tasks = (localStorage.getItem("tasks")) ? JSON.parse(localStorage.getItem("tasks")) : [] ;
   },
 
   methods: {
-      edit(index) {
-          this.$router.push({ name: "Form", params: { index }});
+      edit(taskId) {
+          this.$router.push({ name: "Form", params: { taskId }});
       },
 
-      remove(task, index) {
-          this.taskSelected = task;
-          this.taskSelected.index = index;
+     async remove(taskId) {
+      this.taskSelected = await TasksModel.find(taskId);
+        //   this.taskSelected = task;
+        //   this.taskSelected.index = index;
           this.$refs.modalRemove.show();
       },
 
@@ -62,11 +117,89 @@ export default {
           this.$refs.modalRemove.hide();
       },
 
-      confirmRemove() {
-          this.tasks.splice(this.taskSelected.index, 1);
-          localStorage.setItem("tasks", JSON.stringify(this.tasks));
+     async confirmRemove() {
+        this.taskSelected.delete();
+        this.tasks = await this.getTasks();
+
+        //   this.tasks.splice(this.taskSelected.index, 1);
+        //   localStorage.setItem("tasks", JSON.stringify(this.tasks));
           this.hideModal();
-      }
+      },
+
+    async updateStatus(taskId, status) {
+      let task = await TasksModel.find(taskId);
+        task.status = status;
+        await task.save();
+        this.tasks = await this.getTasks();
+        this.showToast("success", "Sucesso!", "Status da tarefa atualizada com sucesso");
+    },
+
+    isFinished(task) {
+        return task.status === this.status.FINISHED;
+    },
+
+    async filterTasks() {
+        let filter = { ... this.filter};
+        filter = this.clean(filter);
+        filter.userId = JSON.parse(localStorage.getItem('authUser')).id;
+        this.tasks = await TasksModel.params(filter).get();
+    },
+
+    clean(obj) {
+        for(var propName in obj) {
+            if(obj[propName] == null || obj[propName] == undefined) {
+                delete obj[propName];
+            }
+        }
+        return obj;
+    },
+
+   async clearFilter() {
+        this.filter = {
+             subject: null,
+             status: null
+         };
+        this.tasks = await this.getTasks();
+    },
+
+    overduePresente(dateOverdue) {
+        if(!dateOverdue) {
+            return;
+        }
+        return dateOverdue.split('-').reverse().join('/');
+    },
+
+
+    variantOverdue(dateOverdue, taskStatus) {
+        if(!dateOverdue) {
+            return 'light';
+        }
+        if(taskStatus === this.status.FINISHED){
+            return 'success';
+        }
+
+        let dateNow = new Date().toISOString().split("T")[0];
+        if(dateOverdue === dateNow){
+            return 'warning';
+        }
+        if(dateOverdue < dateNow){
+            return 'danger';
+        }
+
+        return 'light';
+    },
+
+    async getTasks() {
+     this.isLoading = true;
+     let self = this;
+        await setTimeout(function() {
+            self.isLoading = false;
+        }, 1000);
+        return await TasksModel.params({
+            userId: JSON.parse(localStorage.getItem('authUser')).id,
+            status: this.statusList
+        }).get();
+    }
   },
 
 
@@ -93,5 +226,18 @@ export default {
     height: 300px;
 }
 
+.finished-task {
+    opacity: 0.7;
+}
 
+.finished-task > .card-body > h4, .finished-task > .card-body > p{
+    text-decoration:line-through;
+}
+
+.loading-spin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 65vh;
+}
 </style>

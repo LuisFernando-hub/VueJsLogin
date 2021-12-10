@@ -4,6 +4,7 @@ import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import List from '../views/List.vue'
 import Form from '../views/Form.vue'
+import Register from '../views/Register.vue'
 
 
 Vue.use(VueRouter)
@@ -11,8 +12,8 @@ Vue.use(VueRouter)
 const routes = [
   {
     path: '/',
-    name: 'List',
-    component: List
+    name: 'login',
+    component: Login
   },
     {
     path: '/form',
@@ -20,9 +21,14 @@ const routes = [
     component: Form
   },
   {
-    path: '/login',
-    name: 'login',
-    component: Login
+    path: '/list',
+    name: 'List',
+    component: List
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: Register
   },
   {
     path: '/about',
@@ -38,6 +44,14 @@ const router = new VueRouter({
   mode: 'history',
   base: process.env.BASE_URL,
   routes
+})
+
+router.beforeEach((to,from,next) =>{
+  if(to.name !== "login" && to.name !== "register" && !localStorage.getItem('authUser')){
+    next({name: 'login'});
+  }else {
+    next();
+  }
 })
 
 export default router
