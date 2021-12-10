@@ -7,12 +7,15 @@
       >
         <b-form-input
           id="subject"
-          v-model="form.subject"
+          v-model.trim="$v.form.subject.$model"
           type="text"
           placeholder="Ex: Editar Modal Ez4u"
           required
           autocomplete="off"
+          :state="getValidation"
+          aria-describedby="subject-feedback"
         ></b-form-input>
+        <b-form-invalid-feedback id="subject-feedback">Título obrigatório.</b-form-invalid-feedback>
       </b-form-group>
 
       <b-form-group
@@ -28,13 +31,19 @@
           autocomplete="off"
         ></b-form-textarea>
       </b-form-group>
-      <b-button type="submit" variant="outline-primary" @click="saveTask">Salvar</b-button>
+      <b-button 
+        type="submit" 
+        variant="outline-primary" 
+        @click="saveTask"
+        :disabled="!getValidation"
+        >Salvar</b-button>
     </b-form>
   </div>
 </template>
 
 <script>
 import ToastMixin from "@/mixins/toastMixin";
+import {required, minLength} from "vuelidate/lib/validators";
 export default {
   name: "Form",
 
@@ -48,6 +57,15 @@ export default {
         },
         methodSave: "new"
      }
+  },
+
+  validations: {
+    form: {
+      subject: {
+        required,
+        minLength: minLength(3)
+      }
+    }
   },
 
   created() {
@@ -74,6 +92,15 @@ export default {
       localStorage.setItem("tasks", JSON.stringify(tasks));
       this.showToast("success", "Sucesso!", "Tarefa criada com sucesso");
       this.$router.push({name: "List"});
+    }
+  },
+
+  computed: {
+    getValidation() {
+      if(this.$v.form.subject.$dirty === false) {
+        return null;
+      }
+      return !this.$v.form.subject.$error;
     }
   }
 }
