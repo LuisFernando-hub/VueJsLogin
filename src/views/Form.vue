@@ -44,6 +44,8 @@
 <script>
 import ToastMixin from "@/mixins/toastMixin";
 import {required, minLength} from "vuelidate/lib/validators";
+import TasksModel from "@/models/TasksModel";
+
 export default {
   name: "Form",
 
@@ -87,9 +89,13 @@ export default {
         return;
       }
 
-      let tasks = (localStorage.getItem("tasks")) ? JSON.parse(localStorage.getItem("tasks")) : [] ;
-      tasks.push(this.form);
-      localStorage.setItem("tasks", JSON.stringify(tasks));
+      // let tasks = (localStorage.getItem("tasks")) ? JSON.parse(localStorage.getItem("tasks")) : [] ;
+      // tasks.push(this.form);
+      // localStorage.setItem("tasks", JSON.stringify(tasks));
+
+      const task = new TasksModel(this.form);
+      task.save();
+
       this.showToast("success", "Sucesso!", "Tarefa criada com sucesso");
       this.$router.push({name: "List"});
     }
